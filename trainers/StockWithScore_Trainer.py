@@ -30,7 +30,7 @@ class StockWithScore_Trainer(object):
         theta=0.5,
         lr=5e-4,
         early_stop=100,
-        loss='mse',
+        loss='mae',
         metric='corr',
         checkpoint=None,
     ):
@@ -52,6 +52,7 @@ class StockWithScore_Trainer(object):
         self.metric_fn = get_metric_fn(metric)
         self.metric_rmse = get_metric_fn('rmse')
         self.metric_mae = get_metric_fn('mae')
+        self.metric_mse = get_metric_fn('mse')
         total_steps = len(train_loader) * self.num_epochs
         self.scheduler = get_cosine_schedule_with_warmup(optimizer=self.optimizer, num_warmup_steps=0, num_training_steps=total_steps)
         os.makedirs(self.log_dir, exist_ok=True)
@@ -82,7 +83,7 @@ class StockWithScore_Trainer(object):
             loss = self.loss_fn(pred=outputs, label=label)
             loss = torch.mean(loss, dim=0, keepdim=False)
             corr = self.metric_fn(x=outputs, y=label).mean()
-            self.model.zero_grad()
+            self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
             loss_epoch += loss.item()
@@ -137,7 +138,8 @@ class StockWithScore_Trainer(object):
         corr = self.metric_fn(x=all_outputs, y=all_labels).mean()
         mae = self.metric_mae(pred=all_outputs, label=all_labels).mean()
         rmse = self.metric_rmse(pred=all_outputs, label=all_labels).mean()
-        self.tensorwriter.add_scalar("eval_mse/epoch", loss.item(), epoch)
+        mse = self.metric_mse(pred=all_outputs, label=all_labels).mean()
+        self.tensorwriter.add_scalar("eval_mse/epoch", mse.item(), epoch)
         self.tensorwriter.add_scalar("eval_corr/epoch", corr.item(), epoch)
         self.tensorwriter.add_scalar("eval_mae/epoch", mae.item(), epoch)
         self.tensorwriter.add_scalar("eval_rmse/epoch", rmse.item(), epoch)
@@ -174,6 +176,7 @@ class StockWithScore_Trainer(object):
         corr = self.metric_fn(x=all_outputs, y=all_labels).mean()
         mae = self.metric_mae(pred=all_outputs, label=all_labels).mean()
         rmse = self.metric_rmse(pred=all_outputs, label=all_labels).mean()
+        mse = self.metric_mse(pred=all_outputs, label=all_labels).mean()
 
         for d, o, l in zip(all_dates, all_outputs, all_labels):
             score_selected = df_pred.loc[(pd.to_datetime(d),slice(None)),['score']].values.squeeze()
@@ -181,7 +184,7 @@ class StockWithScore_Trainer(object):
             assert(score_selected.sum() - o.sum().cpu().item() < EPS)
             assert(label_selected.sum() - l.sum().cpu().item() < EPS)
 
-        return loss, corr, mae, rmse
+        return mse, corr, mae, rmse
 
     def test(self, model, epoch=-1):
         model.to(self.device)
@@ -210,13 +213,14 @@ class StockWithScore_Trainer(object):
         corr = self.metric_fn(x=all_outputs, y=all_labels).mean()
         mae = self.metric_mae(pred=all_outputs, label=all_labels).mean()
         rmse = self.metric_rmse(pred=all_outputs, label=all_labels).mean()
+        mse = self.metric_mse(pred=all_outputs, label=all_labels).mean()
         if epoch > 0:
-            self.tensorwriter.add_scalar("test_mse/epoch", loss.item(), epoch)
+            self.tensorwriter.add_scalar("test_mse/epoch", mse.item(), epoch)
             self.tensorwriter.add_scalar("test_corr/epoch", corr.item(), epoch)
             self.tensorwriter.add_scalar("test_mae/epoch", mae.item(), epoch)
             self.tensorwriter.add_scalar("test_rmse/epoch", rmse.item(), epoch)
-            print(f'Test: mse: {loss:.4f}, corr: {corr:.4f}, mae: {mae:.4f}, rmse: {rmse:.4f}')
-        return loss, corr, mae, rmse
+            print(f'Test: mse: {mse:.4f}, corr: {corr:.4f}, mae: {mae:.4f}, rmse: {rmse:.4f}')
+        return mse, corr, mae, rmse
 
     def configure_optimizer(self):
         return optim.AdamW(self.model.parameters(), lr=self.lr, weight_decay=0.1)

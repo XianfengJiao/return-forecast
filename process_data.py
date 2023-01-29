@@ -26,18 +26,16 @@ def main(args):
         stock_date_data = pd.read_csv(fn)
         date_str = os.path.basename(fn).split('_')[0]
         stock_code = os.path.basename(fn).split('_')[1].replace('.csv', '')
-        stock_date_data['datetime'] = stock_date_data.apply( lambda x: trans_time( date_str, x['time']), axis=1 )
+        stock_date_data['datetime'] = stock_date_data.apply( lambda x: trans_time(date_str, x['time']), axis=1 )
         stock_date_data['date'] = stock_date_data.apply( lambda x: x['datetime'].date(), axis=1)
         stock_date_data['stock'] = 'SZ' + stock_code
         df = pd.concat([df, stock_date_data], axis=0, ignore_index=True)
     df.to_pickle(os.path.join(args.data_path, args.sub_dir, 'stock_data_all.pkl'))
     
 
-
-
 if __name__ == '__main__':
     parser = ArgumentParser()
-    parser.add_argument('--data_path', default='/D_data/v-xfeng/code/Return-Forecast/inputs/SZ_data', type=str)
+    parser.add_argument('--data_path', default='/home/v-xiajiao/code/return_forecast/inputs/SZ_data/10stock_1year', type=str)
     parser.add_argument('--sub_dir', default='test', type=str)
     args = parser.parse_args()
     main(args)

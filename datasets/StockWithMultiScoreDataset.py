@@ -11,12 +11,12 @@ from torch.utils.data import Dataset
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 sys.path.append("..")
 
-class StockWithScoreDataset(Dataset):
-    def __init__(self, input_stock_path, input_score_path, input_pred_path, save_preprocess_path, type, scaler_price=None, scaler_volume=None, topn=64, max_min=False):
+class StockWithMultiScoreDataset(Dataset):
+    def __init__(self, input_stock_path, input_score_path, input_pred_path, save_preprocess_path, type, score_select='m', scaler_price=None, scaler_volume=None):
         os.makedirs(save_preprocess_path, exist_ok=True)
         preprocessed_path = os.path.join(save_preprocess_path, type+'.pkl')
         self.type = type
-        self.max_min = max_min
+        self.score_select = score_select
         if not os.path.isfile(preprocessed_path):
         # if True:
             # -------------------------- Preprocessing DATA --------------------------
@@ -58,26 +58,27 @@ class StockWithScoreDataset(Dataset):
                     date_collect[s_i].append(date)
                     stock_data_tmp = stock_data_selected.loc[('SZ'+stock_name,slice(None)),:]
                     pred_data_tmp = pred_date_selected.loc[(slice(None),'SZ'+stock_name),:]
-                    # Warning: just for test
-                    # pred_data_tmp = pred_date_selected.loc[(slice(None),test_map['SZ'+stock_name]),:]
                     date_collect[s_i].append(pred_data_tmp['score'].values[0])
                     date_collect[s_i].append(pred_data_tmp['label'].values[0])
-                    
-                    # 对每一天取 topn
+
+                    # 对每一天选择应该取的异常点
+
+                    # 最大最小标准化
                     score_selected = np.array(input_score[date_string+'_'+stock_name])
-                    if np.max(score_selected) - np.min(score_selected) != 0:
-                        score_selected = (score_selected - np.min(score_selected)) / (np.max(score_selected) - np.min(score_selected))
-                    if not self.max_min:
-                        ind_topn = np.argpartition(score_selected, -topn)[-topn:]
-                    else:
-                        ind_topn = np.concatenate((np.argpartition(score_selected, -int(topn/2))[-int(topn/2):], np.argpartition(score_selected, int(topn/2))[:int(topn/2)]), axis=0)
+                    score_range = np.max(score_selected, axis=0) - np.min(score_selected, axis=0)
+                    score_range[score_range == 0] = 1
+                    score_selected = (score_selected - np.min(score_selected, axis=0)) / score_range
                     
+                    if self.score_select == 'm':
+                        ind_topn = np.concatenate((np.argmax(score_selected, axis=0), np.argmin(score_selected, axis=0)))
+                    elif self.score_select == 'all':
+                        ind_topn = np.array(range(len(score_selected)))
                     score_topn = score_selected[ind_topn]
                     time_topn = complete_t[ind_topn]
                     date_collect_score = [[] for _ in range(len(ind_topn))]
                     for i, (t, s) in enumerate(zip(time_topn, score_topn)):
                         # 将异常点时刻对应的 price 和 volume 拼进去
-                        date_collect_score[i].append(s) # score
+                        date_collect_score[i] = list(s) # score
                         slice_data = stock_data_tmp[stock_data_tmp['datetime'] <= t]
                         slice_data = slice_data[slice_data['datetime'] > t - pd.Timedelta(seconds=4)]
                         while len(slice_data) <= 0 and t >= complete_t[0]:
@@ -97,6 +98,7 @@ class StockWithScoreDataset(Dataset):
                 
                 input_preprocessed.append(date_collect)
             pkl.dump(input_preprocessed, open(preprocessed_path, 'wb'))
+        
         else:
             # -------------------------- Load Preprocessed DATA ----------------------
             print("Found preprocessed transaction. Loading that!")
@@ -111,6 +113,7 @@ class StockWithScoreDataset(Dataset):
             if date+'_'+name not in input_score:
                 return False
         return True
+
 
     def _norm_transaction(self, df, scaler_price_all, scaler_volume_all):
         stock_names = set([i[0] for i in df.index])

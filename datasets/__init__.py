@@ -1,1 +1,2 @@
 from .StockWithScoreDataset import StockWithScoreDataset
+from .StockWithMultiScoreDataset import StockWithMultiScoreDataset

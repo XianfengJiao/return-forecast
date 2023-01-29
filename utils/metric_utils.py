@@ -141,7 +141,8 @@ def standard_mse(pred, label, axis=1):
     return K.mean(loss, axis=axis, keepdim=False) 
 
 def standard_rmse(pred, label, axis=1):
-    return torch.sqrt(torch.mean(pred-label)**2)
+    loss = (pred - label)**2
+    return torch.sqrt(K.mean(loss, axis=axis, keepdim=False) )
 
 def standard_mae(pred, label, axis=1):
     loss = torch.abs(pred - label)
@@ -165,6 +166,8 @@ def batch_corr(x, y, axis=1, dim=0, keepdim=False):
 def get_loss_fn(loss_fn):
     if loss_fn == 'mse':
         return standard_mse
+    elif loss_fn == 'mae':
+        return standard_mae
     elif loss_fn == 'logcosh':
         return logcosh
     elif loss_fn == 'std_ce':
@@ -178,6 +181,8 @@ def get_metric_fn(eval_metric):
         return batch_corr
     if eval_metric == 'mae':
         return standard_mae
+    if eval_metric == 'mse':
+        return standard_mse
     if eval_metric == 'rmse':
         return standard_rmse
     else:

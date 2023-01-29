@@ -2,3 +2,5 @@ checkpoints
 inputs
 logs
 tools
+results
+*__pycache__

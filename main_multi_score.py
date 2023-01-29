@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from sklearn.preprocessing import StandardScaler
 from argparse import ArgumentParser
 from tensorboardX import SummaryWriter
-from datasets import StockWithScoreDataset
+from datasets import StockWithMultiScoreDataset
 from trainers import StockWithScore_Trainer
 from shutil import copyfile
 import csv
@@ -17,53 +17,43 @@ from models import MLP, GRU, MLP_resnet
 from utils.setting_utils import setup_seed
 from utils.schedule_utils import load_model
 
-def get_model(model_name):
-    if model_name == 'GRU':
-        return GRU()
-    elif model_name == 'MLP':
-        return MLP()
-    elif model_name == 'MLP_resnet':
-        return MLP_resnet()
-    else:
-        raise NotImplementedError('model %s is not implemented'%model_name)
-
 def main(args):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     setup_seed(args.seed)
     # ----------------- Instantiate Dataset ------------------------
-    train_dataset = StockWithScoreDataset(
+    train_dataset = StockWithMultiScoreDataset(
         input_stock_path=os.path.join(args.input_stock_path, 'train', 'stock_data_all.pkl'),
         input_score_path=os.path.join(args.input_score_path, 'train.pkl'),
         input_pred_path=os.path.join(args.input_pred_path, 'train.pkl'),
+        score_select=args.score_select,
         type='train',
-        save_preprocess_path=args.save_preprocess_path,
-        max_min=args.max_min
+        save_preprocess_path=args.save_preprocess_path
         )
     
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=train_dataset.collate_fn)
 
-    valid_dataset = StockWithScoreDataset(
+    valid_dataset = StockWithMultiScoreDataset(
         input_stock_path=os.path.join(args.input_stock_path, 'valid', 'stock_data_all.pkl'),
         input_score_path=os.path.join(args.input_score_path, 'valid.pkl'),
         input_pred_path=os.path.join(args.input_pred_path, 'valid.pkl'),
         scaler_price = train_dataset.scaler_price,
         scaler_volume = train_dataset.scaler_volume,
+        score_select=args.score_select,
         type='valid',
-        save_preprocess_path=args.save_preprocess_path,
-        max_min=args.max_min
+        save_preprocess_path=args.save_preprocess_path
         )
     
     valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=False, collate_fn=valid_dataset.collate_fn)
 
-    test_dataset = StockWithScoreDataset(
+    test_dataset = StockWithMultiScoreDataset(
         input_stock_path=os.path.join(args.input_stock_path, 'test', 'stock_data_all.pkl'),
         input_score_path=os.path.join(args.input_score_path, 'test.pkl'),
         input_pred_path=os.path.join(args.input_pred_path, 'test.pkl'),
         scaler_price = train_dataset.scaler_price,
         scaler_volume = train_dataset.scaler_volume,
+        score_select=args.score_select,
         type='test',
-        save_preprocess_path=args.save_preprocess_path,
-        max_min=args.max_min
+        save_preprocess_path=args.save_preprocess_path
         )
     
     test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, collate_fn=test_dataset.collate_fn)
@@ -118,18 +108,20 @@ def main(args):
     print("End saving metric res...")
 
 
+
+
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--input_stock_path', default='/home/v-xiajiao/code/return_forecast/inputs/SZ_data/10stock_1year', type=str)
-    parser.add_argument('--input_score_path', default='/home/v-xiajiao/code/return_forecast/inputs/feature/10stock_1year/score_mp', type=str)
+    parser.add_argument('--input_score_path', default='/home/v-xiajiao/code/return_forecast/inputs/feature/10stock_1year/score_dyna', type=str)
     parser.add_argument('--input_pred_path', default='/home/v-xiajiao/code/return_forecast/inputs/feature/10stock_1year/pred_rnn_v1_0', type=str)
-    parser.add_argument("--save_preprocess_path", default='/home/v-xiajiao/code/return_forecast/inputs/preprocessed/10stock_1year/SZ_mp_pred_rnn_v1_0', type=str)
+    parser.add_argument("--save_preprocess_path", default='/home/v-xiajiao/code/return_forecast/inputs/preprocessed/10stock_1year/SZ_dyna_pred_rnn_v1_0', type=str)
     parser.add_argument('--batch_size', default=32, type=int)
-    parser.add_argument('--model', default='MLP', type=str)
+    parser.add_argument('--model', default='MLP_resnet', type=str)
+    parser.add_argument('--score_select', default='m', type=str)
     parser.add_argument('--seed', default=0, type=int)
-    parser.add_argument('--max_min', action='store_true')
-    parser.add_argument('--n_input', default=64, type=int)
-    parser.add_argument('--n_feature', default=4, type=int)
+    parser.add_argument('--n_input', default=284, type=int)
+    parser.add_argument('--n_feature', default=145, type=int)
     parser.add_argument('--lr', default=1e-5, type=float)
     parser.add_argument('--dropout_rate', default=0.5, type=float)
     parser.add_argument('--theta', default=0., type=float)
@@ -139,8 +131,6 @@ if __name__ == '__main__':
     parser.add_argument('--save_path', default='/home/v-xiajiao/code/return_forecast/checkpoints/debug', type=str)
     parser.add_argument('--metric_csv_path', default='/home/v-xiajiao/code/return_forecast/results/debug.csv', type=str)
     args = parser.parse_args()
-
-    args.max_min = True
     
     if args.theta == 0:
         args.epoch = 2
